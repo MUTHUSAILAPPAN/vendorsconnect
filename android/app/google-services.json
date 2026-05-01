@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "877911790746",
+    "project_id": "vendorsconnectapp",
+    "storage_bucket": "vendorsconnectapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:877911790746:android:9f6575fb2fb12df9ec3b23",
+        "android_client_info": {
+          "package_name": "com.example.vendors_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6JksFXjszKkIJKldMCHap8HB5H9BYBYg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
