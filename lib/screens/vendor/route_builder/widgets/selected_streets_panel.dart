@@ -11,6 +11,7 @@ class SelectedStreetsPanel extends StatelessWidget {
   final TextEditingController routeNameController;
   final void Function(int oldIndex, int newIndex) onReorder;
   final void Function(int index) onRemove;
+  final void Function(int index, String newName) onRename;
 
   const SelectedStreetsPanel({
     super.key,
@@ -21,7 +22,41 @@ class SelectedStreetsPanel extends StatelessWidget {
     required this.routeNameController,
     required this.onReorder,
     required this.onRemove,
+    required this.onRename,
   });
+
+  Future<void> _showRenameDialog(BuildContext context, int index, String currentName) async {
+    final controller = TextEditingController(text: currentName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Street'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Street Name',
+            hintText: 'Enter custom street name',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(ctx, controller.text.trim());
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null) {
+      onRename(index, newName);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +205,11 @@ class SelectedStreetsPanel extends StatelessWidget {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 16),
+                          tooltip: 'Rename',
+                          onPressed: () => _showRenameDialog(context, index, street.name),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.close, size: 16),
                           tooltip: 'Remove',

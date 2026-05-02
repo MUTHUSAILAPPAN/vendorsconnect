@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/vendor_route.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../services/location_service.dart';
 import '../../services/notification_service.dart';
 
 class ActiveRouteScreen extends StatefulWidget {
@@ -18,12 +21,32 @@ class ActiveRouteScreen extends StatefulWidget {
 class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   final notificationService = NotificationService();
   final firestoreService = FirestoreService();
+  final locationService = LocationService();
+  final mapController = MapController();
 
   int currentIndex = 0;
   bool routeStarted = false;
   bool routeFinished = false;
   bool loading = false;
   final Set<int> reachedStops = {};
+  LatLng? currentVendorLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocation();
+  }
+
+  Future<void> _initLocation() async {
+    try {
+      final res = await locationService.getCurrentLocation();
+      if (res != null) {
+        setState(() {
+          currentVendorLocation = LatLng(res.point.latitude, res.point.longitude);
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> reachedStreet() async {
     final vendor = context.read<AppProvider>().currentUser;
@@ -32,7 +55,14 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
     setState(() => loading = true);
     try {
       final street = widget.route.streets[currentIndex];
-      await notificationService.notifyFollowers(vendorId: vendor.id, vendorName: vendor.name, followerIds: vendor.followers, street: street);
+      await notificationService.notifyFollowers(
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        followerIds: vendor.followers,
+        street: street,
+        type: 'manual_arrival',
+        source: 'manual',
+      );
       if (!mounted) return;
       setState(() {
         reachedStops.add(currentIndex);
@@ -90,10 +120,104 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
     final progressValue = totalStops == 0 ? 0.0 : reachedCount / totalStops;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.route.name)),
+      appBar: AppBar(
+        title: Text(widget.route.name),
+        actions: [
+          if (widget.route.coordinates.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.my_location),
+              onPressed: () {
+                if (currentVendorLocation != null) {
+                  mapController.move(currentVendorLocation!, 15);
+                }
+              },
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(0),
         children: [
+          // ── Map Section (Optional) ──────────────
+          if (widget.route.coordinates.isNotEmpty)
+            SizedBox(
+              height: 240,
+              child: FlutterMap(
+                mapController: mapController,
+                options: MapOptions(
+                  initialCenter: LatLng(
+                    widget.route.coordinates.first.latitude,
+                    widget.route.coordinates.first.longitude,
+                  ),
+                  initialZoom: 14,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.vendors_connect',
+                  ),
+                  PolylineLayer(
+                    polylines: [
+                      if (widget.route.streetGeometries.isNotEmpty)
+                        for (final geo in widget.route.streetGeometries)
+                          Polyline(
+                            points: geo.map((p) => LatLng(p.latitude, p.longitude)).toList(),
+                            color: colorScheme.primary.withValues(alpha: 0.6),
+                            strokeWidth: 6,
+                          )
+                      else
+                        Polyline(
+                          points: widget.route.coordinates
+                              .map((p) => LatLng(p.latitude, p.longitude))
+                              .toList(),
+                          color: colorScheme.primary.withValues(alpha: 0.4),
+                          strokeWidth: 4,
+                        ),
+                    ],
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      // Stop markers
+                      for (int i = 0; i < widget.route.coordinates.length; i++)
+                        Marker(
+                          point: LatLng(
+                            widget.route.coordinates[i].latitude,
+                            widget.route.coordinates[i].longitude,
+                          ),
+                          width: 32,
+                          height: 32,
+                          child: Icon(
+                            reachedStops.contains(i)
+                                ? Icons.check_circle
+                                : i == currentIndex && routeStarted && !routeFinished
+                                    ? Icons.location_on
+                                    : Icons.circle,
+                            color: reachedStops.contains(i)
+                                ? Colors.green
+                                : i == currentIndex && routeStarted && !routeFinished
+                                    ? Colors.blue
+                                    : Colors.grey,
+                            size: i == currentIndex && routeStarted && !routeFinished ? 32 : 24,
+                          ),
+                        ),
+                      // Current vendor location
+                      if (currentVendorLocation != null)
+                        Marker(
+                          point: currentVendorLocation!,
+                          width: 16,
+                          height: 16,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           // ── Progress header ─────────────────────
           Container(
             color: colorScheme.surfaceContainerLow,

@@ -9,6 +9,8 @@ class AppNotification {
   final String street;
   final bool read;
   final DateTime? createdAt;
+  final String type; // manual_arrival / geofence_arrival / vendor_update / request_response
+  final String source; // manual / geofence
 
   AppNotification({
     required this.id,
@@ -19,6 +21,8 @@ class AppNotification {
     required this.street,
     required this.read,
     required this.createdAt,
+    required this.type,
+    required this.source,
   });
 
   factory AppNotification.fromMap(String id, Map<String, dynamic> data) {
@@ -37,6 +41,8 @@ class AppNotification {
       street: data['street'] as String? ?? '',
       read: data['read'] as bool? ?? false,
       createdAt: createdAt,
+      type: data['type'] as String? ?? 'manual_arrival',
+      source: data['source'] as String? ?? 'manual',
     );
   }
 
@@ -49,6 +55,8 @@ class AppNotification {
       'street': street,
       'read': read,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'type': type,
+      'source': source,
     };
   }
 }

@@ -17,6 +17,10 @@ class AppUser {
   final List<String> menu;
   final bool isAvailable;
   final String currentRouteId;
+  // ── Schedule ──────────────────────────────────
+  final List<String> workingDays;
+  final String availableFrom;
+  final String availableTo;
   // ── Notification preferences ──────────────────
   final bool notificationsEnabled;
   final List<String> mutedVendorIds;
@@ -26,6 +30,11 @@ class AppUser {
   // ── Approval ──────────────────────────────────
   final String approvalStatus;
   final String rejectionReason;
+  // ── Privacy ───────────────────────────────────
+  final bool showRoutesPublicly;
+  final bool isContactPublic;
+  // ── Blocking ──────────────────────────────────
+  final List<String> blockedUserIds;
 
   AppUser({
     required this.id,
@@ -44,12 +53,18 @@ class AppUser {
     required this.menu,
     required this.isAvailable,
     required this.currentRouteId,
+    this.workingDays = const [],
+    this.availableFrom = '',
+    this.availableTo = '',
     this.notificationsEnabled = true,
     this.mutedVendorIds = const [],
     this.isBlocked = false,
     this.blockedReason = '',
     this.approvalStatus = 'approved',
     this.rejectionReason = '',
+    this.showRoutesPublicly = false,
+    this.isContactPublic = true,
+    this.blockedUserIds = const [],
   });
 
   factory AppUser.emptyAdmin() {
@@ -70,12 +85,18 @@ class AppUser {
       menu: [],
       isAvailable: false,
       currentRouteId: '',
+      workingDays: const [],
+      availableFrom: '',
+      availableTo: '',
       notificationsEnabled: true,
       mutedVendorIds: [],
       isBlocked: false,
       blockedReason: '',
       approvalStatus: 'approved',
       rejectionReason: '',
+      showRoutesPublicly: false,
+      isContactPublic: true,
+      blockedUserIds: [],
     );
   }
 
@@ -97,13 +118,18 @@ class AppUser {
       menu: List<String>.from(data['menu'] ?? []),
       isAvailable: data['isAvailable'] ?? false,
       currentRouteId: data['currentRouteId'] ?? '',
-      // Safe defaults for existing documents that predate these fields
+      workingDays: List<String>.from(data['workingDays'] ?? []),
+      availableFrom: data['availableFrom'] as String? ?? '',
+      availableTo: data['availableTo'] as String? ?? '',
       notificationsEnabled: data['notificationsEnabled'] as bool? ?? true,
       mutedVendorIds: List<String>.from(data['mutedVendorIds'] ?? []),
       isBlocked: data['isBlocked'] as bool? ?? false,
       blockedReason: data['blockedReason'] as String? ?? '',
       approvalStatus: data['approvalStatus'] as String? ?? 'approved',
       rejectionReason: data['rejectionReason'] as String? ?? '',
+      showRoutesPublicly: data['showRoutesPublicly'] as bool? ?? false,
+      isContactPublic: data['isContactPublic'] as bool? ?? true,
+      blockedUserIds: List<String>.from(data['blockedUserIds'] ?? []),
     );
   }
 
@@ -125,12 +151,18 @@ class AppUser {
       'menu': menu,
       'isAvailable': isAvailable,
       'currentRouteId': currentRouteId,
+      'workingDays': workingDays,
+      'availableFrom': availableFrom,
+      'availableTo': availableTo,
       'notificationsEnabled': notificationsEnabled,
       'mutedVendorIds': mutedVendorIds,
       'isBlocked': isBlocked,
       'blockedReason': blockedReason,
       'approvalStatus': approvalStatus,
       'rejectionReason': rejectionReason,
+      'showRoutesPublicly': showRoutesPublicly,
+      'isContactPublic': isContactPublic,
+      'blockedUserIds': blockedUserIds,
     };
   }
 
@@ -150,12 +182,18 @@ class AppUser {
     List<String>? menu,
     bool? isAvailable,
     String? currentRouteId,
+    List<String>? workingDays,
+    String? availableFrom,
+    String? availableTo,
     bool? notificationsEnabled,
     List<String>? mutedVendorIds,
     bool? isBlocked,
     String? blockedReason,
     String? approvalStatus,
     String? rejectionReason,
+    bool? showRoutesPublicly,
+    bool? isContactPublic,
+    List<String>? blockedUserIds,
   }) {
     return AppUser(
       id: id,
@@ -174,12 +212,18 @@ class AppUser {
       menu: menu ?? this.menu,
       isAvailable: isAvailable ?? this.isAvailable,
       currentRouteId: currentRouteId ?? this.currentRouteId,
+      workingDays: workingDays ?? this.workingDays,
+      availableFrom: availableFrom ?? this.availableFrom,
+      availableTo: availableTo ?? this.availableTo,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       mutedVendorIds: mutedVendorIds ?? this.mutedVendorIds,
       isBlocked: isBlocked ?? this.isBlocked,
       blockedReason: blockedReason ?? this.blockedReason,
       approvalStatus: approvalStatus ?? this.approvalStatus,
       rejectionReason: rejectionReason ?? this.rejectionReason,
+      showRoutesPublicly: showRoutesPublicly ?? this.showRoutesPublicly,
+      isContactPublic: isContactPublic ?? this.isContactPublic,
+      blockedUserIds: blockedUserIds ?? this.blockedUserIds,
     );
   }
 }

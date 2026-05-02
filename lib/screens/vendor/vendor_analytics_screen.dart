@@ -104,6 +104,44 @@ class _VendorAnalyticsScreenState extends State<VendorAnalyticsScreen> {
                     topStreet = combinedStreets.entries.reduce((a, b) => a.value > b.value ? a : b).key;
                   }
 
+                  // ── Follower Interest Insights ──────────────────────────────────────
+                  int matchingFollowersCount = 0;
+                  int noMatchingFollowersCount = 0;
+                  final Map<String, int> followerInterestDistribution = {};
+                  final Map<String, int> vendorCategoryMatchCounts = {
+                    for (var interest in vendor.interests) interest: 0
+                  };
+
+                  for (final f in followers) {
+                    bool hasMatch = false;
+                    
+                    if (f.interests.isEmpty) {
+                      noMatchingFollowersCount++;
+                    } else {
+                      for (final interest in f.interests) {
+                        // Distribution among ALL followers
+                        followerInterestDistribution[interest] = (followerInterestDistribution[interest] ?? 0) + 1;
+                        
+                        // Check match with vendor categories
+                        if (vendor.interests.contains(interest)) {
+                          hasMatch = true;
+                          vendorCategoryMatchCounts[interest] = (vendorCategoryMatchCounts[interest] ?? 0) + 1;
+                        }
+                      }
+                      
+                      if (hasMatch) {
+                        matchingFollowersCount++;
+                      } else {
+                        noMatchingFollowersCount++;
+                      }
+                    }
+                  }
+
+                  final sortedFollowerInterests = followerInterestDistribution.entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value));
+                  final sortedVendorMatches = vendorCategoryMatchCounts.entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value));
+
                   return ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
@@ -139,6 +177,75 @@ class _VendorAnalyticsScreenState extends State<VendorAnalyticsScreen> {
                               const Text('Based on follower locations & past routes', style: TextStyle(fontSize: 12)),
                             ],
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // ── Follower Interest Insights ─────────────────────────────────────
+                      const Text('Follower Interest Insights', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildSmallStat('Matches', matchingFollowersCount.toString(), Colors.green),
+                                  ),
+                                  Container(height: 30, width: 1, color: Colors.grey.shade300),
+                                  Expanded(
+                                    child: _buildSmallStat('No Match', noMatchingFollowersCount.toString(), Colors.grey),
+                                  ),
+                                  Container(height: 30, width: 1, color: Colors.grey.shade300),
+                                  Expanded(
+                                    child: _buildSmallStat('Match %', 
+                                      followers.isEmpty ? '0%' : '${(matchingFollowersCount / followers.length * 100).toStringAsFixed(0)}%', 
+                                      Colors.blue),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      if (vendor.interests.isNotEmpty) ...[
+                        const Text('Matches by Your Categories', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+                        const SizedBox(height: 8),
+                        Card(
+                          child: Column(
+                            children: sortedVendorMatches.isEmpty 
+                              ? [const ListTile(title: Text('No categories set'))]
+                              : sortedVendorMatches.map((entry) {
+                                  return _buildBarRow(
+                                    label: entry.key,
+                                    count: entry.value,
+                                    maxCount: followers.isNotEmpty ? followers.length : 1,
+                                    color: Colors.green,
+                                  );
+                                }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      const Text('Top Follower Interests', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      Card(
+                        child: Column(
+                          children: sortedFollowerInterests.isEmpty
+                            ? [const ListTile(title: Text('No interests recorded'))]
+                            : sortedFollowerInterests.take(5).map((entry) {
+                                return _buildBarRow(
+                                  label: entry.key,
+                                  count: entry.value,
+                                  maxCount: followers.isNotEmpty ? followers.length : 1,
+                                  color: Colors.blue,
+                                );
+                              }).toList(),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -240,6 +347,15 @@ class _VendorAnalyticsScreenState extends State<VendorAnalyticsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSmallStat(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+      ],
     );
   }
 

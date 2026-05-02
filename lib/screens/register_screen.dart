@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/vendor_categories.dart';
+import '../constants/vehicle_options.dart';
 import '../providers/app_provider.dart';
 import '../services/firestore_service.dart';
 import 'resident/resident_home_screen.dart';
@@ -23,7 +25,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final phoneController = TextEditingController();
   final passwordController = TextEditingController();
   final bioController = TextEditingController();
-  final vehicleController = TextEditingController();
   final itemController = TextEditingController();
   final priceController = TextEditingController();
 
@@ -34,13 +35,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final List<String> selectedInterests = [];
   final List<String> menuItems = [];
 
+  String? selectedVehicle;
+
   @override
   void dispose() {
     nameController.dispose();
     phoneController.dispose();
     passwordController.dispose();
     bioController.dispose();
-    vehicleController.dispose();
     itemController.dispose();
     priceController.dispose();
     super.dispose();
@@ -97,6 +99,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ));
       return;
     }
+    if (role == 'vendor' && selectedVehicle == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle')));
+      return;
+    }
     setState(() => loading = true);
     try {
       final user = await firestoreService.registerUser(
@@ -106,7 +112,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: passwordController.text.trim(),
         bio: bioController.text.trim(),
         interests: selectedInterests,
-        vehicle: vehicleController.text.trim(),
+        vehicle: selectedVehicle ?? '',
         menu: menuItems,
       );
       if (!mounted) return;
@@ -171,6 +177,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             TextFormField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone_outlined)),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Phone is required';
@@ -205,23 +212,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
               maxLines: 2,
             ),
             _sectionLabel(context, isVendor ? 'Vendor Categories' : 'Interests'),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: vendorCategories.map((category) {
-                final selected = selectedInterests.contains(category);
-                return FilterChip(label: Text(category), selected: selected, onSelected: (_) => toggleInterest(category));
-              }).toList(),
+            StreamBuilder<List<String>>(
+              stream: firestoreService.configValuesStream('vendor_categories'),
+              initialData: vendorCategories,
+              builder: (context, snapshot) {
+                final categories = snapshot.data ?? vendorCategories;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: categories.map((category) {
+                    final selected = selectedInterests.contains(category);
+                    return FilterChip(label: Text(category), selected: selected, onSelected: (_) => toggleInterest(category));
+                  }).toList(),
+                );
+              },
             ),
             if (isVendor) ...[
               _sectionLabel(context, 'Vendor Details'),
-              TextFormField(
-                controller: vehicleController,
-                decoration: const InputDecoration(
-                  labelText: 'Vehicle info',
-                  prefixIcon: Icon(Icons.local_shipping_outlined),
-                  hintText: 'e.g. Red bicycle',
-                ),
+              StreamBuilder<List<String>>(
+                stream: firestoreService.configValuesStream('vehicle_options'),
+                initialData: defaultVehicleOptions,
+                builder: (context, snapshot) {
+                  final options = snapshot.data ?? defaultVehicleOptions;
+                  // If selected value is no longer in options, set it to null
+                  if (selectedVehicle != null && !options.contains(selectedVehicle)) {
+                    // Using post-frame callback to avoid build conflicts
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() => selectedVehicle = null);
+                    });
+                  }
+                  
+                  return DropdownButtonFormField<String>(
+                    initialValue: selectedVehicle,
+                    decoration: const InputDecoration(
+                      labelText: 'Vehicle Type',
+                      prefixIcon: Icon(Icons.local_shipping_outlined),
+                    ),
+                    items: options.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                    onChanged: (v) => setState(() => selectedVehicle = v),
+                    validator: (v) => v == null ? 'Vehicle is required' : null,
+                  );
+                },
               ),
               _sectionLabel(context, 'Menu Items'),
               Row(

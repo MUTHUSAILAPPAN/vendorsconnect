@@ -33,9 +33,12 @@ class NotificationService {
     required String vendorName,
     required List<String> followerIds,
     required String street,
+    String type = 'manual_arrival',
+    String source = 'manual',
+    String? customMessage,
   }) async {
     try {
-      final message = 'Vendor $vendorName has reached $street';
+      final message = customMessage ?? 'Vendor $vendorName has reached $street';
 
       for (final followerId in followerIds) {
         final residentDoc = await _db.collection('users').doc(followerId).get();
@@ -51,6 +54,8 @@ class NotificationService {
           'residentId': followerId,
           'message': message,
           'street': street,
+          'type': type,
+          'source': source,
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
         });
@@ -58,6 +63,25 @@ class NotificationService {
     } catch (e) {
       throw _handleError(e);
     }
+  }
+
+  /// Placeholder for future geofence notifications.
+  /// To be called when a vendor enters a street's geofence.
+  Future<void> notifyFollowersFromGeofence({
+    required String vendorId,
+    required String vendorName,
+    required List<String> followerIds,
+    required String street,
+  }) async {
+    return notifyFollowers(
+      vendorId: vendorId,
+      vendorName: vendorName,
+      followerIds: followerIds,
+      street: street,
+      type: 'geofence_arrival',
+      source: 'geofence',
+      customMessage: 'Location update: $vendorName is nearby on $street',
+    );
   }
 
   Stream<List<AppNotification>> notificationsForUser(String userId) {

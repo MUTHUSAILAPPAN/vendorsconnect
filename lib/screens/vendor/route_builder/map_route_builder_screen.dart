@@ -126,6 +126,16 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
         return;
       }
 
+      // ── Prompt if "Unnamed" ─────────────────────
+      if (street.name.toLowerCase().contains('unnamed')) {
+        final newName = await _showRenameDialog(street.name);
+        if (newName != null && newName.trim().isNotEmpty) {
+          final renamed = street.copyWith(name: newName.trim());
+          setState(() => selectedStreets.add(renamed));
+          return;
+        }
+      }
+
       setState(() => selectedStreets.add(street));
     } catch (e) {
       if (!mounted) return;
@@ -217,6 +227,41 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
     setState(() => selectedStreets.removeAt(index));
   }
 
+  void onRenameStreet(int index, String newName) {
+    setState(() {
+      selectedStreets[index] = selectedStreets[index].copyWith(name: newName);
+    });
+  }
+
+  Future<String?> _showRenameDialog(String currentName) async {
+    final controller = TextEditingController(text: currentName);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Street'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Street Name',
+            hintText: 'Enter custom street name',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(ctx, controller.text.trim());
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─────────────────────────────────────────────
   // Save route (name comes from bottom panel field)
   // ─────────────────────────────────────────────
@@ -246,6 +291,9 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
     final coordinates = selectedStreets
         .map((s) => GeoPoint(s.center.latitude, s.center.longitude))
         .toList();
+    final streetGeometries = selectedStreets.map((s) {
+      return s.geometry.map((p) => GeoPoint(p.latitude, p.longitude)).toList();
+    }).toList();
 
     try {
       await firestoreService.createRoute(
@@ -253,6 +301,7 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
         name: routeName,
         streets: streets,
         coordinates: coordinates,
+        streetGeometries: streetGeometries,
       );
 
       if (!mounted) return;
@@ -522,6 +571,7 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
           onSave: saveRoute,
           onReorder: onReorder,
           onRemove: onRemove,
+          onRename: onRenameStreet,
         ),
       ),
     );

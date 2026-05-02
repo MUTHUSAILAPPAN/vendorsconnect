@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:flutter/foundation.dart';
 import '../models/app_user.dart';
 import '../models/vendor_route.dart';
+import '../constants/vehicle_options.dart';
+import '../constants/vendor_categories.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -26,12 +29,13 @@ class FirestoreService {
 
   Future<AppUser?> login(String phone, String password) async {
     try {
-      if (phone == 'admin' && password == 'admin123') {
+      final trimmedPhone = phone.trim();
+      if (trimmedPhone == 'admin' && password == 'admin123') {
         return AppUser.emptyAdmin();
       }
 
       final result = await users
-          .where('phone', isEqualTo: phone)
+          .where('phone', isEqualTo: trimmedPhone)
           .where('password', isEqualTo: password)
           .limit(1)
           .get();
@@ -56,7 +60,8 @@ class FirestoreService {
     required List<String> menu,
   }) async {
     try {
-      final existingUser = await users.where('phone', isEqualTo: phone).limit(1).get();
+      final trimmedPhone = phone.trim();
+      final existingUser = await users.where('phone', isEqualTo: trimmedPhone).limit(1).get();
       if (existingUser.docs.isNotEmpty) {
         throw Exception('This phone number is already registered.');
       }
@@ -67,7 +72,7 @@ class FirestoreService {
         id: doc.id,
         role: role,
         name: name,
-        phone: phone,
+        phone: trimmedPhone,
         password: password,
         bio: bio,
         location: null,
@@ -81,6 +86,9 @@ class FirestoreService {
         isAvailable: false,
         currentRouteId: '',
         approvalStatus: role == 'vendor' ? 'pending' : 'approved',
+        workingDays: const [],
+        availableFrom: '',
+        availableTo: '',
       );
 
       await doc.set(user.toMap());
@@ -187,6 +195,7 @@ class FirestoreService {
     required String name,
     required List<String> streets,
     required List<GeoPoint> coordinates,
+    required List<List<GeoPoint>> streetGeometries,
   }) async {
     try {
       final doc = routes.doc();
@@ -197,6 +206,7 @@ class FirestoreService {
         name: name,
         streets: streets,
         coordinates: coordinates,
+        streetGeometries: streetGeometries,
       );
 
       await doc.set(route.toMap());
@@ -272,6 +282,48 @@ class FirestoreService {
     } catch (e) {
       throw _handleError(e);
     }
+  }
+
+  Future<void> updateContactVisibility(String userId, bool isPublic) async {
+    try {
+      await users.doc(userId).update({
+        'isContactPublic': isPublic,
+      });
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> addToBlockedList(String currentUserId, String targetUserId) async {
+    try {
+      await users.doc(currentUserId).update({
+        'blockedUserIds': FieldValue.arrayUnion([targetUserId]),
+      });
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> removeFromBlockedList(String currentUserId, String targetUserId) async {
+    try {
+      await users.doc(currentUserId).update({
+        'blockedUserIds': FieldValue.arrayRemove([targetUserId]),
+      });
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Stream<List<AppUser>> blockedUsersStream(List<String> blockedIds) {
+    if (blockedIds.isEmpty) return Stream.value([]);
+    // Firestore 'in' query supports up to 30 elements.
+    // For prototype, we'll assume it's small or chunk it if needed.
+    return users
+        .where(FieldPath.documentId, whereIn: blockedIds.take(30).toList())
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => AppUser.fromMap(doc.id, doc.data()))
+            .toList());
   }
 
   Future<void> updateNotificationEnabled(AppUser user, bool enabled) async {
@@ -478,5 +530,75 @@ class FirestoreService {
     } catch (e) {
       throw _handleError(e);
     }
+  }
+
+  // ── Config ────────────────────────────────────
+
+  Stream<List<String>> configValuesStream(String configId) {
+    return _db.collection('app_config').doc(configId).snapshots().map((doc) {
+      if (doc.exists && doc.data()?['values'] != null) {
+        return List<String>.from(doc.data()!['values']);
+      }
+      // Fallback to defaults if doc doesn't exist
+      if (configId == 'vendor_categories') return vendorCategories;
+      if (configId == 'vehicle_options') return defaultVehicleOptions;
+      return [];
+    });
+  }
+
+  Future<void> addConfigValue(String configId, String value) async {
+    try {
+      await _db.collection('app_config').doc(configId).set({
+        'values': FieldValue.arrayUnion([value]),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> removeConfigValue(String configId, String value) async {
+    try {
+      await _db.collection('app_config').doc(configId).update({
+        'values': FieldValue.arrayRemove([value]),
+      });
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> ensureDefaultConfig() async {
+    try {
+      final catDoc = await _db.collection('app_config').doc('vendor_categories').get();
+      if (!catDoc.exists) {
+        await _db.collection('app_config').doc('vendor_categories').set({'values': vendorCategories});
+      }
+
+      final vehDoc = await _db.collection('app_config').doc('vehicle_options').get();
+      if (!vehDoc.exists) {
+        await _db.collection('app_config').doc('vehicle_options').set({'values': defaultVehicleOptions});
+      }
+    } catch (e) {
+      debugPrint('Error ensuring default config: $e');
+    }
+  }
+
+  Future<List<String>> getVehicleOptions() async {
+    try {
+      final doc = await _db.collection('app_config').doc('vehicle_options').get();
+      if (doc.exists && doc.data()?['values'] != null) {
+        return List<String>.from(doc.data()!['values']);
+      }
+    } catch (_) {}
+    return defaultVehicleOptions;
+  }
+
+  Future<List<String>> getCategories() async {
+    try {
+      final doc = await _db.collection('app_config').doc('vendor_categories').get();
+      if (doc.exists && doc.data()?['values'] != null) {
+        return List<String>.from(doc.data()!['values']);
+      }
+    } catch (_) {}
+    return vendorCategories;
   }
 }

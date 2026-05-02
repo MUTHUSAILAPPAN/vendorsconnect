@@ -23,41 +23,85 @@ class VendorsConnectApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppProvider(),
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'VendorsConnect',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF2E7D32),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-          cardTheme: const CardThemeData(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-              side: BorderSide(color: Color(0xFFE0E0E0)),
+      child: Consumer<AppProvider>(
+        builder: (context, provider, _) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'VendorsConnect',
+            themeMode: provider.currentThemeMode,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF2E7D32),
+                brightness: Brightness.light,
+              ),
+              useMaterial3: true,
+              cardTheme: const CardThemeData(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  side: BorderSide(color: Color(0xFFE0E0E0)),
+                ),
+                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+              appBarTheme: const AppBarTheme(
+                centerTitle: false,
+                elevation: 0,
+                scrolledUnderElevation: 1,
+              ),
+              listTileTheme: const ListTileThemeData(
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              ),
             ),
-            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+            darkTheme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF2E7D32),
+                brightness: Brightness.dark,
+              ),
+              useMaterial3: true,
+              cardTheme: const CardThemeData(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  side: BorderSide(color: Color(0xFF424242)),
+                ),
+                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+              appBarTheme: const AppBarTheme(
+                centerTitle: false,
+                elevation: 0,
+                scrolledUnderElevation: 1,
+              ),
+              listTileTheme: const ListTileThemeData(
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              ),
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-          appBarTheme: const AppBarTheme(
-            centerTitle: false,
-            elevation: 0,
-            scrolledUnderElevation: 1,
-          ),
-          listTileTheme: const ListTileThemeData(
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          ),
-        ),
-        home: const SplashScreen(),
+            home: const SplashScreen(),
+          );
+        },
       ),
+      builder: (context, child) {
+        final provider = context.watch<AppProvider>();
+        return MediaQuery(
+          // ignore: deprecated_member_use
+          data: MediaQuery.of(context).copyWith(
+            // Apply custom scaling
+            textScaler: TextScaler.linear(provider.fontScale),
+          ),
+          child: child!,
+        );
+      },
     );
   }
 }

@@ -3,8 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../../constants/report_reasons.dart';
 import '../../models/app_user.dart';
+import '../../models/vendor_route.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/confirm_dialog.dart';
+import '../../widgets/login_required_view.dart';
+import 'vendor_active_route_map_screen.dart';
 import 'vendor_request_screen.dart';
 
 class VendorProfileScreen extends StatefulWidget {
@@ -30,7 +34,11 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
   Future<void> toggleFollow() async {
     final provider = context.read<AppProvider>();
     final resident = provider.currentUser;
-    if (resident == null || loadingFollow) return;
+    if (resident == null) {
+      showLoginPrompt(context);
+      return;
+    }
+    if (loadingFollow) return;
 
     setState(() => loadingFollow = true);
     try {
@@ -61,7 +69,10 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
   Future<void> toggleMute() async {
     final provider = context.read<AppProvider>();
     final resident = provider.currentUser;
-    if (resident == null) return;
+    if (resident == null) {
+      showLoginPrompt(context);
+      return;
+    }
 
     final isMuted = resident.mutedVendorIds.contains(vendor.id);
     
@@ -92,7 +103,10 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
 
   Future<void> _reportVendor() async {
     final resident = context.read<AppProvider>().currentUser;
-    if (resident == null) return;
+    if (resident == null) {
+      showLoginPrompt(context);
+      return;
+    }
 
     String? selectedReason;
     final detailsController = TextEditingController();
@@ -186,6 +200,40 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
             tooltip: 'Report Vendor',
             onPressed: _reportVendor,
           ),
+          IconButton(
+            icon: const Icon(Icons.block_outlined),
+            tooltip: 'Block Vendor',
+            onPressed: () async {
+              final provider = context.read<AppProvider>();
+              if (provider.isGuest) {
+                showLoginPrompt(context);
+                return;
+              }
+              final confirm = await showConfirmDialog(
+                context: context,
+                title: 'Block Vendor',
+                message: 'Are you sure you want to block ${vendor.name}? You will no longer see their updates or location.',
+                confirmText: 'Block',
+              );
+              if (confirm) {
+                try {
+                  await provider.blockUser(vendor.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${vendor.name} blocked')),
+                    );
+                    Navigator.pop(context);
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not block vendor')),
+                    );
+                  }
+                }
+              }
+            },
+          ),
         ],
       ),
       body: ListView(
@@ -269,6 +317,10 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: FilledButton.tonalIcon(
               onPressed: () {
+                if (currentUser == null) {
+                  showLoginPrompt(context);
+                  return;
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => VendorRequestScreen(vendor: vendor)),
@@ -298,6 +350,23 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
             ),
           ],
 
+          // ── Schedule ────────────────────────────
+          if (vendor.workingDays.isNotEmpty || (vendor.availableFrom.isNotEmpty && vendor.availableTo.isNotEmpty)) ...[
+            const _SectionHeader('Schedule'),
+            if (vendor.workingDays.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.calendar_today_outlined),
+                title: const Text('Working Days'),
+                subtitle: Text(vendor.workingDays.join(', ')),
+              ),
+            if (vendor.availableFrom.isNotEmpty && vendor.availableTo.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.access_time),
+                title: const Text('Working Hours'),
+                subtitle: Text('${vendor.availableFrom} - ${vendor.availableTo}'),
+              ),
+          ],
+
           // ── Details section ─────────────────────
           if (vendor.bio.isNotEmpty || vendor.vehicle.isNotEmpty || vendor.locationName.isNotEmpty) ...[
             const _SectionHeader('Details'),
@@ -319,6 +388,11 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                 title: const Text('Current location'),
                 subtitle: Text(vendor.locationName),
               ),
+            ListTile(
+              leading: const Icon(Icons.phone_outlined),
+              title: const Text('Contact Info'),
+              subtitle: Text(vendor.isContactPublic ? vendor.phone : 'Contact is private'),
+            ),
           ],
 
           // ── Categories ──────────────────────────
@@ -334,6 +408,77 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
             ),
           ],
 
+          // ── Active Route Status ──────────────────
+          if (vendor.currentRouteId.isNotEmpty && vendor.showRoutesPublicly)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: FutureBuilder<VendorRoute?>(
+                future: firestoreService.getRoute(vendor.currentRouteId),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    final activeRoute = snapshot.data!;
+                    return Card(
+                      color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.directions_run, color: Colors.white, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Currently on a route!',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      ),
+                                      Text(
+                                        'Route: ${activeRoute.name}',
+                                        style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => VendorActiveRouteMapScreen(route: activeRoute, vendor: vendor)),
+                                ),
+                                icon: const Icon(Icons.map_outlined),
+                                label: const Text('View Active Route'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+
           // ── Menu ────────────────────────────────
           const _SectionHeader('Menu'),
           if (vendor.menu.isEmpty)
@@ -347,6 +492,46 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                 leading: const Icon(Icons.restaurant_menu),
                 title: Text(item),
               ),
+
+          // ── Public Routes ───────────────────────
+          const _SectionHeader('Service Routes'),
+          if (!vendor.showRoutesPublicly)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Text('Routes are private.', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+            )
+          else
+            StreamBuilder<List<VendorRoute>>(
+              stream: firestoreService.vendorRoutesStream(vendor.id),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                  );
+                }
+                final routes = snapshot.data ?? [];
+                if (routes.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Text('No routes published.', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  );
+                }
+                return Column(
+                  children: routes.map((route) {
+                    return ListTile(
+                      leading: const Icon(Icons.route_outlined),
+                      title: Text(route.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(
+                        '${route.streets.length} stops: ${route.streets.take(3).join(", ")}${route.streets.length > 3 ? "..." : ""}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
 
           const SizedBox(height: 24),
         ],

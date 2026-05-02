@@ -5,12 +5,14 @@ import '../../models/app_user.dart';
 import '../../models/vendor_route.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../login_screen.dart';
 import '../resident/resident_home_screen.dart';
 import '../vendor/vendor_home_screen.dart';
 import 'admin_vendor_approval_screen.dart';
 import 'reports_admin_screen.dart';
 import 'requests_admin_screen.dart';
+import 'config_admin_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -28,13 +30,23 @@ class AdminHomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: () {
-              context.read<AppProvider>().logout();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (_) => false,
+            onPressed: () async {
+              final confirm = await showConfirmDialog(
+                context: context,
+                title: 'Logout',
+                message: 'Are you sure you want to log out?',
+                confirmText: 'Logout',
               );
+              if (confirm) {
+                if (context.mounted) {
+                  context.read<AppProvider>().logout();
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (_) => false,
+                  );
+                }
+              }
             },
           ),
         ],
@@ -127,6 +139,14 @@ class AdminHomeScreen extends StatelessWidget {
                   title: const Text('All Vendor Requests'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestsAdminScreen())),
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.settings, size: 18)),
+                  title: const Text('System Configuration'),
+                  subtitle: const Text('Manage categories & vehicles'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConfigAdminScreen())),
                 ),
               ],
             ),
@@ -243,21 +263,25 @@ class AdminHomeScreen extends StatelessWidget {
                                       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User blocked')));
                                     }
                                   } else if (value == 'unblock') {
-                                    await firestoreService.unblockUser(users[i].id);
-                                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User unblocked')));
-                                  } else if (value == 'delete') {
-                                    final confirm = await showDialog<bool>(
+                                    final confirm = await showConfirmDialog(
                                       context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('Delete User?'),
-                                        content: const Text('This action cannot be undone.'),
-                                        actions: [
-                                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                          FilledButton(onPressed: () => Navigator.pop(context, true), style: FilledButton.styleFrom(backgroundColor: Colors.red), child: const Text('Delete')),
-                                        ],
-                                      ),
+                                      title: 'Unblock User?',
+                                      message: 'Are you sure you want to unblock ${users[i].name}?',
+                                      confirmText: 'Unblock',
                                     );
-                                    if (confirm == true) {
+                                    if (confirm) {
+                                      await firestoreService.unblockUser(users[i].id);
+                                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User unblocked')));
+                                    }
+                                  } else if (value == 'delete') {
+                                    final confirm = await showConfirmDialog(
+                                      context: context,
+                                      title: 'Delete User?',
+                                      message: 'This action cannot be undone and will remove all user data.',
+                                      confirmText: 'Delete',
+                                      confirmColor: Colors.red,
+                                    );
+                                    if (confirm) {
                                       await firestoreService.deleteUser(users[i].id);
                                       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User deleted')));
                                     }

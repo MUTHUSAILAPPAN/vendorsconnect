@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/vendor_route.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/confirm_dialog.dart';
 import 'active_route_screen.dart';
 import 'route_builder/map_route_builder_screen.dart';
 
@@ -15,20 +16,12 @@ class RouteManagementScreen extends StatelessWidget {
     required FirestoreService firestoreService,
     required VendorRoute route,
   }) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete route?'),
-        content: Text('Are you sure you want to delete "${route.name}"? This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: 'Delete route?',
+      message: 'Are you sure you want to delete "${route.name}"? This cannot be undone.',
+      confirmText: 'Delete',
+      confirmColor: Theme.of(context).colorScheme.error,
     );
 
     if (confirmed != true) return;
@@ -51,6 +44,11 @@ class RouteManagementScreen extends StatelessWidget {
     try {
       await firestoreService.setCurrentRoute(vendorId: vendorId, routeId: route.id);
       if (!context.mounted) return;
+      final provider = context.read<AppProvider>();
+      final user = provider.currentUser;
+      if (user != null) {
+        provider.updateUser(user.copyWith(currentRouteId: route.id));
+      }
       Navigator.push(context, MaterialPageRoute(builder: (_) => ActiveRouteScreen(route: route)));
     } catch (error) {
       if (!context.mounted) return;

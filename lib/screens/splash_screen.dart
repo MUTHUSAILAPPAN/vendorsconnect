@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
-import 'login_screen.dart';
 import 'resident/resident_home_screen.dart';
 import 'vendor/vendor_home_screen.dart';
 import 'admin/admin_home_screen.dart';
@@ -28,7 +27,7 @@ class _SplashScreenState extends State<SplashScreen> {
       Widget nextScreen;
 
       if (user == null) {
-        nextScreen = const LoginScreen();
+        nextScreen = const ResidentHomeScreen();
       } else if (user.role == 'vendor') {
         nextScreen = const VendorHomeScreen();
       } else if (user.role == 'admin') {

@@ -6,7 +6,7 @@
 
 
     <application
-        android:label="vendors_connect"
+        android:label="Thallu Vandi"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

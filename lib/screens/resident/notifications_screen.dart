@@ -5,6 +5,7 @@ import '../../models/app_notification.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/confirm_dialog.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -54,22 +55,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final user = context.read<AppProvider>().currentUser;
     if (user == null) return;
 
-    final confirm = await showDialog<bool>(
+    final confirm = await showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear all notifications?'),
-        content: const Text('This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Clear All'),
-          ),
-        ],
-      ),
+      title: 'Clear all notifications?',
+      message: 'This action cannot be undone.',
+      confirmText: 'Clear All',
     );
 
     if (confirm != true) return;
@@ -119,6 +109,52 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
+  }
+
+  Widget _buildTypeBadge(AppNotification notif, ColorScheme colorScheme) {
+    String label = 'Notification';
+    IconData icon = Icons.notifications;
+    Color color = colorScheme.secondary;
+
+    switch (notif.type) {
+      case 'manual_arrival':
+        label = 'Manual arrival update';
+        icon = Icons.touch_app_outlined;
+        color = Colors.blue;
+        break;
+      case 'geofence_arrival':
+        label = 'Location-based arrival';
+        icon = Icons.location_on_outlined;
+        color = Colors.green;
+        break;
+      case 'vendor_update':
+        label = 'Vendor update';
+        icon = Icons.edit_note;
+        color = Colors.orange;
+        break;
+      case 'request_response':
+        label = 'Vendor response';
+        icon = Icons.chat_bubble_outline;
+        color = Colors.purple;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -260,6 +296,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const SizedBox(height: 4),
+                          _buildTypeBadge(notif, colorScheme),
                           const SizedBox(height: 4),
                           Text(
                             notif.message,
