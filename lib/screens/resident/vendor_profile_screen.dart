@@ -284,8 +284,14 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                       if (vendor.followers.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
-                          child: Text('${vendor.followers.length} follower(s)',
-                              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
+                          child: Builder(
+                            builder: (context) {
+                              // Filter out self-follow from count if it exists
+                              final displayFollowers = vendor.followers.where((id) => id != vendor.id).length;
+                              return Text('$displayFollowers follower(s)',
+                                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13));
+                            }
+                          ),
                         ),
                     ],
                   ),
@@ -294,22 +300,43 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
             ),
           ),
 
-          // ── Follow button ───────────────────────
+          // ── Follow button / Own Profile Message ──────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: FilledButton.icon(
-              onPressed: loadingFollow ? null : toggleFollow,
-              style: isFollowing
-                  ? FilledButton.styleFrom(
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      foregroundColor: colorScheme.onSurfaceVariant,
-                    )
-                  : null,
-              icon: loadingFollow
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Icon(isFollowing ? Icons.favorite : Icons.favorite_border),
-              label: Text(loadingFollow ? 'Updating...' : isFollowing ? 'Unfollow' : 'Follow'),
-            ),
+            child: (currentUser != null && currentUser.id == vendor.id)
+                ? Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 20, color: colorScheme.primary),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'This is your vendor profile. You cannot follow yourself.',
+                            style: TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : FilledButton.icon(
+                    onPressed: loadingFollow ? null : toggleFollow,
+                    style: isFollowing
+                        ? FilledButton.styleFrom(
+                            backgroundColor: colorScheme.surfaceContainerHighest,
+                            foregroundColor: colorScheme.onSurfaceVariant,
+                          )
+                        : null,
+                    icon: loadingFollow
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Icon(isFollowing ? Icons.favorite : Icons.favorite_border),
+                    label: Text(loadingFollow ? 'Updating...' : isFollowing ? 'Unfollow' : 'Follow'),
+                  ),
           ),
 
           // ── Ask Vendor ──────────────────────────

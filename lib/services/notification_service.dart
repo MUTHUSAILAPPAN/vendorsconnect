@@ -35,6 +35,8 @@ class NotificationService {
     required String street,
     String type = 'manual_arrival',
     String source = 'manual',
+    String verificationStatus = 'unverified',
+    double? distanceMeters,
     String? customMessage,
   }) async {
     try {
@@ -56,6 +58,8 @@ class NotificationService {
           'street': street,
           'type': type,
           'source': source,
+          'verificationStatus': verificationStatus,
+          'distanceMeters': distanceMeters,
           'createdAt': FieldValue.serverTimestamp(),
           'read': false,
         });

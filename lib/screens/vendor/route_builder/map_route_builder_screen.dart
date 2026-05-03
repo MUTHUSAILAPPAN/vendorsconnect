@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/selected_street.dart';
+import '../../../models/vendor_route.dart';
 import '../../../providers/app_provider.dart';
 import '../../../services/firestore_service.dart';
 import '../../../services/location_service.dart';
@@ -13,7 +14,8 @@ import 'widgets/place_search_bar.dart';
 import 'widgets/selected_streets_panel.dart';
 
 class MapRouteBuilderScreen extends StatefulWidget {
-  const MapRouteBuilderScreen({super.key});
+  final VendorRoute? existingRoute;
+  const MapRouteBuilderScreen({super.key, this.existingRoute});
 
   @override
   State<MapRouteBuilderScreen> createState() => _MapRouteBuilderScreenState();
@@ -42,6 +44,43 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
   final _distance = const Distance();
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.existingRoute != null) {
+      routeNameController.text = widget.existingRoute!.name;
+      
+      // Load selected streets from existing route
+      final route = widget.existingRoute!;
+      for (int i = 0; i < route.streets.length; i++) {
+        final name = route.streets[i];
+        final center = LatLng(route.coordinates[i].latitude, route.coordinates[i].longitude);
+        
+        // Backward compatibility: if geometries are missing, use center as fallback
+        List<LatLng> geometry = [];
+        if (route.streetGeometries.length > i && route.streetGeometries[i].isNotEmpty) {
+          geometry = route.streetGeometries[i].map((p) => LatLng(p.latitude, p.longitude)).toList();
+        } else {
+          geometry = [center];
+        }
+        
+        selectedStreets.add(SelectedStreet(
+          name: name,
+          center: center,
+          geometry: geometry,
+        ));
+      }
+      
+      // Zoom to show the route
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (selectedStreets.isNotEmpty) {
+          final bounds = LatLngBounds.fromPoints(selectedStreets.map((s) => s.center).toList());
+          mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)));
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     routeNameController.dispose();
     super.dispose();
@@ -52,15 +91,26 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
   // ─────────────────────────────────────────────
 
   Future<bool> _onWillPop() async {
-    if (selectedStreets.isEmpty) return true;
+    // If nothing changed, just leave
+    if (widget.existingRoute == null) {
+      if (selectedStreets.isEmpty && routeNameController.text.isEmpty) return true;
+    } else {
+      final route = widget.existingRoute!;
+      final isSameName = routeNameController.text == route.name;
+      final isSameStreets = selectedStreets.length == route.streets.length &&
+          List.generate(selectedStreets.length, (i) => selectedStreets[i].name == route.streets[i]).every((b) => b);
+      
+      if (isSameName && isSameStreets) return true;
+    }
 
     final leave = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Discard route?'),
+        title: Text(widget.existingRoute != null ? 'Discard changes?' : 'Discard route?'),
         content: Text(
-          'You have ${selectedStreets.length} street${selectedStreets.length > 1 ? "s" : ""} selected. '
-          'Leaving now will discard them.',
+          widget.existingRoute != null
+              ? 'You have unsaved changes to this route. Leaving now will discard them.'
+              : 'You have ${selectedStreets.length} street${selectedStreets.length > 1 ? "s" : ""} selected. Leaving now will discard them.',
         ),
         actions: [
           TextButton(
@@ -296,18 +346,30 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
     }).toList();
 
     try {
-      await firestoreService.createRoute(
-        vendorId: user.id,
-        name: routeName,
-        streets: streets,
-        coordinates: coordinates,
-        streetGeometries: streetGeometries,
-      );
+      if (widget.existingRoute != null) {
+        final updatedRoute = VendorRoute(
+          id: widget.existingRoute!.id,
+          vendorId: user.id,
+          name: routeName,
+          streets: streets,
+          coordinates: coordinates,
+          streetGeometries: streetGeometries,
+        );
+        await firestoreService.updateRoute(updatedRoute);
+      } else {
+        await firestoreService.createRoute(
+          vendorId: user.id,
+          name: routeName,
+          streets: streets,
+          coordinates: coordinates,
+          streetGeometries: streetGeometries,
+        );
+      }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Route "$routeName" saved!')),
+        SnackBar(content: Text('Route "$routeName" ${widget.existingRoute != null ? "updated" : "saved"}!')),
       );
 
       Navigator.pop(context);
@@ -450,7 +512,7 @@ class _MapRouteBuilderScreenState extends State<MapRouteBuilderScreen> {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Build Route'),
+              Text(widget.existingRoute != null ? 'Edit Route' : 'Build Route'),
               if (selectedStreets.isNotEmpty)
                 Text(
                   '${selectedStreets.length} street${selectedStreets.length > 1 ? "s" : ""} selected',

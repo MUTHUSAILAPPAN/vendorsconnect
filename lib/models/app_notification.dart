@@ -10,7 +10,9 @@ class AppNotification {
   final bool read;
   final DateTime? createdAt;
   final String type; // manual_arrival / geofence_arrival / vendor_update / request_response
-  final String source; // manual / geofence
+  final String source; // manual / geofence / verified_manual
+  final String verificationStatus; // unverified / location_verified / location_mismatch
+  final double? distanceMeters;
 
   AppNotification({
     required this.id,
@@ -23,6 +25,8 @@ class AppNotification {
     required this.createdAt,
     required this.type,
     required this.source,
+    this.verificationStatus = 'unverified',
+    this.distanceMeters,
   });
 
   factory AppNotification.fromMap(String id, Map<String, dynamic> data) {
@@ -43,6 +47,8 @@ class AppNotification {
       createdAt: createdAt,
       type: data['type'] as String? ?? 'manual_arrival',
       source: data['source'] as String? ?? 'manual',
+      verificationStatus: data['verificationStatus'] as String? ?? 'unverified',
+      distanceMeters: (data['distanceMeters'] as num?)?.toDouble(),
     );
   }
 
@@ -57,6 +63,8 @@ class AppNotification {
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'type': type,
       'source': source,
+      'verificationStatus': verificationStatus,
+      'distanceMeters': distanceMeters,
     };
   }
 }

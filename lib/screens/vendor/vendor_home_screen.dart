@@ -30,12 +30,47 @@ class _VendorHomeScreenState extends State<VendorHomeScreen> {
   ];
 
   String _getTitle(BuildContext context, int index) {
+    if (index == 2) {
+      final user = context.read<AppProvider>().currentUser;
+      return user?.name ?? 'Profile';
+    }
     final titles = ['Analytics', 'Requests', 'Profile', 'Routes', 'Settings'];
     return context.t(titles[index]);
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final user = provider.currentUser;
+
+    if (user != null && user.role != 'vendor' && user.role != 'admin') {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 64, color: Colors.orange),
+              const SizedBox(height: 16),
+              const Text('Wrong UI Role detected.', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('You do not have vendor permissions.'),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => provider.getHomeWidget()),
+                    (_) => false,
+                  );
+                },
+                child: const Text('Switch to Resident Home'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_getTitle(context, index)),

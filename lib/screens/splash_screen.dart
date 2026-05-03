@@ -22,23 +22,10 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
 
       final appProvider = context.read<AppProvider>();
-      final user = appProvider.currentUser;
-
-      Widget nextScreen;
-
-      if (user == null) {
-        nextScreen = const ResidentHomeScreen();
-      } else if (user.role == 'vendor') {
-        nextScreen = const VendorHomeScreen();
-      } else if (user.role == 'admin') {
-        nextScreen = const AdminHomeScreen();
-      } else {
-        nextScreen = const ResidentHomeScreen();
-      }
-
+      
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => nextScreen),
+        MaterialPageRoute(builder: (_) => appProvider.getHomeWidget()),
       );
     });
   }

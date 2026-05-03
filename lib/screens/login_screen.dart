@@ -58,20 +58,13 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      context.read<AppProvider>().login(user);
+      final provider = context.read<AppProvider>();
+      provider.login(user);
 
-      Widget home;
-      if (user.role == 'vendor') {
-        home = const VendorHomeScreen();
-      } else if (user.role == 'admin') {
-        home = const AdminHomeScreen();
-      } else {
-        home = const ResidentHomeScreen();
-      }
-
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => home),
+        MaterialPageRoute(builder: (_) => provider.getHomeWidget()),
       );
     } catch (error) {
       if (!mounted) return;
@@ -194,9 +187,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 OutlinedButton(
                   onPressed: () {
+                    final provider = context.read<AppProvider>();
+                    // Ensure state is clear if continuing as guest
+                    if (provider.currentUser != null) {
+                      provider.logout();
+                    }
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const ResidentHomeScreen()),
+                      MaterialPageRoute(builder: (_) => provider.getHomeWidget()),
                     );
                   },
                   style: OutlinedButton.styleFrom(

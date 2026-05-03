@@ -116,27 +116,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     IconData icon = Icons.notifications;
     Color color = colorScheme.secondary;
 
-    switch (notif.type) {
-      case 'manual_arrival':
-        label = 'Manual arrival update';
-        icon = Icons.touch_app_outlined;
-        color = Colors.blue;
-        break;
-      case 'geofence_arrival':
-        label = 'Location-based arrival';
-        icon = Icons.location_on_outlined;
-        color = Colors.green;
-        break;
-      case 'vendor_update':
-        label = 'Vendor update';
-        icon = Icons.edit_note;
-        color = Colors.orange;
-        break;
-      case 'request_response':
-        label = 'Vendor response';
-        icon = Icons.chat_bubble_outline;
-        color = Colors.purple;
-        break;
+    // Check source and verification status first for custom labels
+    if (notif.source == 'geofence') {
+      label = 'Location-based arrival';
+      icon = Icons.location_on_outlined;
+      color = Colors.green;
+    } else if (notif.source == 'verified_manual') {
+      label = 'Location verified arrival';
+      icon = Icons.verified_user_outlined;
+      color = Colors.blue;
+    } else if (notif.verificationStatus == 'location_mismatch') {
+      label = 'Manual update, location not verified';
+      icon = Icons.warning_amber_rounded;
+      color = Colors.orange;
+    } else {
+      // Fallback to type-based labeling
+      switch (notif.type) {
+        case 'manual_arrival':
+          label = 'Manual arrival update';
+          icon = Icons.touch_app_outlined;
+          color = Colors.blue;
+          break;
+        case 'geofence_arrival':
+          label = 'Location-based arrival';
+          icon = Icons.location_on_outlined;
+          color = Colors.green;
+          break;
+        case 'vendor_update':
+          label = 'Vendor update';
+          icon = Icons.edit_note;
+          color = Colors.orange;
+          break;
+        case 'request_response':
+          label = 'Vendor response';
+          icon = Icons.chat_bubble_outline;
+          color = Colors.purple;
+          break;
+      }
     }
 
     return Container(

@@ -146,6 +146,9 @@ class FirestoreService {
     required String residentId,
     required String vendorId,
   }) async {
+    if (residentId == vendorId) {
+      throw Exception('You cannot follow your own vendor profile.');
+    }
     try {
       await users.doc(residentId).update({
         'following': FieldValue.arrayUnion([vendorId]),
@@ -256,6 +259,22 @@ class FirestoreService {
   Future<void> deleteRoute(String routeId) async {
     try {
       await routes.doc(routeId).delete();
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> updateRouteName(String routeId, String name) async {
+    try {
+      await routes.doc(routeId).update({'name': name});
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> updateRoute(VendorRoute route) async {
+    try {
+      await routes.doc(route.id).update(route.toMap());
     } catch (e) {
       throw _handleError(e);
     }

@@ -116,10 +116,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         menu: menuItems,
       );
       if (!mounted) return;
-      context.read<AppProvider>().login(user);
+      final provider = context.read<AppProvider>();
+      provider.login(user);
+      
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => role == 'vendor' ? const VendorHomeScreen() : const ResidentHomeScreen()),
+        MaterialPageRoute(builder: (_) => provider.getHomeWidget()),
         (_) => false,
       );
     } catch (error) {

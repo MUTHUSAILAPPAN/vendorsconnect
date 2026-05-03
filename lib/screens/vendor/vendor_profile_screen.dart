@@ -195,7 +195,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vendor Profile'),
+        title: Text('${user.name} Profile'),
         actions: [
           if (!_isEditing)
             TextButton.icon(
@@ -543,8 +543,13 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
             // ── Followers ───────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text('FOLLOWERS (${user.followers.length})',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.primary, letterSpacing: 1, fontWeight: FontWeight.w600)),
+              child: Builder(
+                builder: (context) {
+                  final displayFollowers = user.followers.where((id) => id != user.id).length;
+                  return Text('FOLLOWERS ($displayFollowers)',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.primary, letterSpacing: 1, fontWeight: FontWeight.w600));
+                }
+              ),
             ),
             StreamBuilder<List<AppUser>>(
               stream: firestoreService.followersStream(user.followers),
@@ -555,6 +560,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                 final currentUser = context.watch<AppProvider>().currentUser;
                 final followers = snapshot.data!
                     .where((f) => !(currentUser?.blockedUserIds.contains(f.id) ?? false))
+                    .where((f) => f.id != user.id) // Filter self-follow
                     .toList();
                 return Column(children: followers.map((f) => ListTile(
                   leading: const CircleAvatar(child: Icon(Icons.person, size: 18)),

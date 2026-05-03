@@ -149,7 +149,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Profile'),
+        title: Text('${user.name} Profile'),
         actions: [
           if (!_isEditing)
             TextButton.icon(

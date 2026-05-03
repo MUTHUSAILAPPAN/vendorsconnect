@@ -76,4 +76,13 @@ class LocationService {
       return '${point.latitude}, ${point.longitude}';
     }
   }
+
+  Stream<Position> getPositionStream() {
+    return Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    );
+  }
 }

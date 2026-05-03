@@ -29,19 +29,54 @@ class _ResidentHomeScreenState extends State<ResidentHomeScreen> {
       const ResidentMapScreen(),
       isGuest ? const LoginRequiredView(title: 'Requests', message: 'Login to send and track service requests.', icon: Icons.forum_outlined) : const ResidentRequestsScreen(),
       isGuest ? LoginRequiredView(title: context.t('Following'), message: 'Follow vendors to get real-time arrival updates.', icon: Icons.favorite_outline) : const FollowingScreen(),
-      isGuest ? LoginRequiredView(title: context.t('Profile'), message: 'Manage your profile and preferences.', icon: Icons.person_outline) : const ResidentProfileScreen(),
+      isGuest ? LoginRequiredView(title: context.t('Guest Profile'), message: 'Manage your profile and preferences.', icon: Icons.person_outline) : const ResidentProfileScreen(),
       const AppSettingsScreen(),
     ];
   }
 
   String _getTitle(BuildContext context, int index) {
+    if (index == 4) {
+      final user = context.read<AppProvider>().currentUser;
+      return user?.name ?? 'Guest';
+    }
     final titles = ['Vendors', 'Map', 'Requests', 'Following', 'Profile', 'Settings'];
     return context.t(titles[index]);
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AppProvider>().currentUser;
+    final provider = context.watch<AppProvider>();
+    final user = provider.currentUser;
+
+    // Safety check: If a vendor is somehow in ResidentHomeScreen, 
+    // we should show a restricted view or a button to switch back.
+    if (user != null && user.role == 'vendor') {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 64, color: Colors.orange),
+              const SizedBox(height: 16),
+              const Text('Wrong UI Role detected.', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('You are logged in as a vendor.'),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => provider.getHomeWidget()),
+                    (_) => false,
+                  );
+                },
+                child: const Text('Switch to Vendor Home'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(

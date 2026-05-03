@@ -2,10 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
 import '../services/firestore_service.dart';
+import '../screens/resident/resident_home_screen.dart';
+import '../screens/vendor/vendor_home_screen.dart';
+import '../screens/admin/admin_home_screen.dart';
 
 class AppProvider extends ChangeNotifier {
   AppUser? currentUser;
   String adminViewRole = 'resident';
+
+  Widget getHomeWidget() {
+    if (currentUser == null) return const ResidentHomeScreen();
+    
+    switch (currentUser!.role) {
+      case 'vendor':
+        return const VendorHomeScreen();
+      case 'admin':
+        return const AdminHomeScreen();
+      default:
+        return const ResidentHomeScreen();
+    }
+  }
 
   // App Settings
   String themeMode = 'System'; // System, Light, Dark

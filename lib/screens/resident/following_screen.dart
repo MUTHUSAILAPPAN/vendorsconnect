@@ -47,6 +47,7 @@ class FollowingScreen extends StatelessWidget {
             final followed = snapshot.data!
                 .where((vendor) => currentUser.following.contains(vendor.id))
                 .where((vendor) => !currentUser.blockedUserIds.contains(vendor.id))
+                .where((vendor) => vendor.id != currentUser.id) // Filter self-follow
                 .toList();
 
             if (followed.isEmpty) {

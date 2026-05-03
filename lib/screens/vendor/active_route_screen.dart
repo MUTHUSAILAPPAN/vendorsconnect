@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +10,8 @@ import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
 import '../../services/notification_service.dart';
+
+enum RouteOperationMode { manual, autoGeofence, verifiedManual }
 
 class ActiveRouteScreen extends StatefulWidget {
   final VendorRoute route;
@@ -31,10 +35,15 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
   final Set<int> reachedStops = {};
   LatLng? currentVendorLocation;
 
+  RouteOperationMode selectedMode = RouteOperationMode.manual;
+  StreamSubscription<Position>? _positionStreamSubscription;
+  double? distanceToCurrentStop;
+  static const double geofenceRadiusMeters = 40;
+
   @override
-  void initState() {
-    super.initState();
-    _initLocation();
+  void dispose() {
+    _stopLocationTracking();
+    super.dispose();
   }
 
   Future<void> _initLocation() async {
@@ -48,28 +57,159 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
     } catch (_) {}
   }
 
-  Future<void> reachedStreet() async {
+  void _startLocationTracking() async {
+    await _stopLocationTracking();
+
+    try {
+      // Check permissions first
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Location permission is required for automatic detection. Switching to manual mode.'),
+          ));
+          setState(() => selectedMode = RouteOperationMode.manual);
+        }
+        return;
+      }
+
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Location service is off. Switching to manual mode.'),
+          ));
+          setState(() => selectedMode = RouteOperationMode.manual);
+        }
+        return;
+      }
+
+      _positionStreamSubscription = locationService.getPositionStream().listen(
+        (position) {
+          if (!mounted) return;
+          _onLocationUpdate(LatLng(position.latitude, position.longitude));
+        },
+        onError: (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Location tracking error: $error. Switching to manual.')));
+            setState(() => selectedMode = RouteOperationMode.manual);
+          }
+          _stopLocationTracking();
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to start tracking: $e')));
+        setState(() => selectedMode = RouteOperationMode.manual);
+      }
+    }
+  }
+
+  Future<void> _stopLocationTracking() async {
+    await _positionStreamSubscription?.cancel();
+    _positionStreamSubscription = null;
+    if (mounted) {
+      setState(() {
+        distanceToCurrentStop = null;
+      });
+    }
+  }
+
+  void _onLocationUpdate(LatLng location) {
+    setState(() {
+      currentVendorLocation = location;
+    });
+
+    if (!routeStarted || routeFinished || widget.route.coordinates.isEmpty) return;
+
+    final target = widget.route.coordinates[currentIndex];
+    final distance = Geolocator.distanceBetween(
+      location.latitude,
+      location.longitude,
+      target.latitude,
+      target.longitude,
+    );
+
+    setState(() {
+      distanceToCurrentStop = distance;
+    });
+
+    if (selectedMode == RouteOperationMode.autoGeofence && distance <= geofenceRadiusMeters) {
+      if (!reachedStops.contains(currentIndex)) {
+        reachedStreet(autoTriggered: true);
+      }
+    }
+  }
+
+  Future<void> reachedStreet({bool autoTriggered = false}) async {
     final vendor = context.read<AppProvider>().currentUser;
     if (vendor == null || widget.route.streets.isEmpty || routeFinished || !routeStarted || reachedStops.contains(currentIndex)) return;
+
+    // Mode-specific logic
+    if (!autoTriggered) {
+      if (selectedMode == RouteOperationMode.verifiedManual) {
+        if (currentVendorLocation == null) {
+          final confirm = await _showManualConfirmDialog(
+            'Location Unavailable',
+            'Could not verify your location. Send manual update instead?',
+          );
+          if (confirm != true) return;
+        } else if (distanceToCurrentStop != null && distanceToCurrentStop! > geofenceRadiusMeters) {
+          final confirm = await _showManualConfirmDialog(
+            'Distance Warning',
+            'You are about ${distanceToCurrentStop!.toInt()} meters away from this street. Send manual update anyway?',
+          );
+          if (confirm != true) return;
+        }
+      }
+    }
 
     setState(() => loading = true);
     try {
       final street = widget.route.streets[currentIndex];
+      
+      String source = 'manual';
+      String verificationStatus = 'unverified';
+      String type = 'manual_arrival';
+
+      if (autoTriggered) {
+        source = 'geofence';
+        verificationStatus = 'location_verified';
+        type = 'geofence_arrival';
+      } else if (selectedMode == RouteOperationMode.verifiedManual) {
+        source = 'verified_manual';
+        if (distanceToCurrentStop != null && distanceToCurrentStop! <= geofenceRadiusMeters) {
+          verificationStatus = 'location_verified';
+        } else {
+          source = 'manual';
+          verificationStatus = 'location_mismatch';
+        }
+      }
+
       await notificationService.notifyFollowers(
         vendorId: vendor.id,
         vendorName: vendor.name,
         followerIds: vendor.followers,
         street: street,
-        type: 'manual_arrival',
-        source: 'manual',
+        type: type,
+        source: source,
+        verificationStatus: verificationStatus,
+        distanceMeters: distanceToCurrentStop,
       );
+      
       if (!mounted) return;
       setState(() {
         reachedStops.add(currentIndex);
         if (currentIndex < widget.route.streets.length - 1) {
           currentIndex++;
+          // distance will update in next stream pulse
         } else {
           routeFinished = true;
+          _stopLocationTracking();
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Followers notified: $street')));
@@ -81,6 +221,20 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
     }
   }
 
+  Future<bool?> _showManualConfirmDialog(String title, String message) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send Anyway')),
+        ],
+      ),
+    );
+  }
+
   void startRoute() {
     setState(() {
       routeStarted = true;
@@ -88,6 +242,17 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
       currentIndex = 0;
       reachedStops.clear();
     });
+
+    if (selectedMode != RouteOperationMode.manual) {
+      if (widget.route.coordinates.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This route does not have coordinates. Manual mode only.'),
+        ));
+        setState(() => selectedMode = RouteOperationMode.manual);
+      } else {
+        _startLocationTracking();
+      }
+    }
   }
 
   Future<void> finishRoute() async {
@@ -109,6 +274,12 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
     } finally {
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocation();
   }
 
   @override
@@ -283,6 +454,81 @@ class _ActiveRouteScreenState extends State<ActiveRouteScreen> {
                     color: routeFinished ? Colors.green : colorScheme.primary,
                   ),
                 ),
+                if (routeStarted && !routeFinished && selectedMode != RouteOperationMode.manual) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.gps_fixed, size: 14, color: colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        distanceToCurrentStop != null 
+                          ? 'Distance to current stop: ${distanceToCurrentStop!.toInt()} m'
+                          : 'Tracking location...',
+                        style: TextStyle(fontSize: 13, color: colorScheme.primary, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ── Operation Mode ──────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'OPERATION MODE',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.primary,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<RouteOperationMode>(
+                  segments: const [
+                    ButtonSegment(value: RouteOperationMode.manual, label: Text('Manual'), icon: Icon(Icons.touch_app, size: 16)),
+                    ButtonSegment(value: RouteOperationMode.autoGeofence, label: Text('Auto'), icon: Icon(Icons.auto_awesome, size: 16)),
+                    ButtonSegment(value: RouteOperationMode.verifiedManual, label: Text('Verify'), icon: Icon(Icons.verified_user, size: 16)),
+                  ],
+                  selected: {selectedMode},
+                  onSelectionChanged: (newSelection) {
+                    if (routeStarted && !routeFinished) {
+                      // Handle mode change during active route
+                      final newMode = newSelection.first;
+                      if (newMode == RouteOperationMode.manual) {
+                        _stopLocationTracking();
+                      } else if (selectedMode == RouteOperationMode.manual) {
+                        _startLocationTracking();
+                      }
+                    }
+                    setState(() => selectedMode = newSelection.first);
+                  },
+                  showSelectedIcon: false,
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                if (selectedMode == RouteOperationMode.autoGeofence)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 4),
+                    child: Text(
+                      'App will automatically notify when you are within ${geofenceRadiusMeters.toInt()}m of a stop.',
+                      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                if (selectedMode == RouteOperationMode.verifiedManual)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 4),
+                    child: Text(
+                      'Manual button will verify your location before sending.',
+                      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                    ),
+                  ),
               ],
             ),
           ),

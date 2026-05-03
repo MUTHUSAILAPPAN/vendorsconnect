@@ -56,6 +56,51 @@ class RouteManagementScreen extends StatelessWidget {
     }
   }
 
+  Future<void> renameRoute({
+    required BuildContext context,
+    required FirestoreService firestoreService,
+    required VendorRoute route,
+  }) async {
+    final controller = TextEditingController(text: route.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Route'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Route Name',
+            hintText: 'Enter new route name',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(ctx, controller.text.trim());
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName != route.name) {
+      try {
+        await firestoreService.updateRouteName(route.id, newName);
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Renamed to "$newName"')));
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AppProvider>().currentUser;
@@ -139,10 +184,14 @@ class RouteManagementScreen extends StatelessWidget {
                 trailing: PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'start') startRoute(context: context, firestoreService: firestoreService, vendorId: user.id, route: route);
+                    if (value == 'edit') Navigator.push(context, MaterialPageRoute(builder: (_) => MapRouteBuilderScreen(existingRoute: route)));
+                    if (value == 'rename') renameRoute(context: context, firestoreService: firestoreService, route: route);
                     if (value == 'delete') confirmDeleteRoute(context: context, firestoreService: firestoreService, route: route);
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'start', child: ListTile(leading: Icon(Icons.play_arrow), title: Text('Start route'), contentPadding: EdgeInsets.zero)),
+                    PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit route'), contentPadding: EdgeInsets.zero)),
+                    PopupMenuItem(value: 'rename', child: ListTile(leading: Icon(Icons.drive_file_rename_outline), title: Text('Rename'), contentPadding: EdgeInsets.zero)),
                     PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete route'), contentPadding: EdgeInsets.zero)),
                   ],
                 ),
